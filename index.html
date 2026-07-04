@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Pulse</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="nav">
+  <div class="nav-inner">
+    <a href="/" class="nav-logo">Pulse<span>.</span></a>
+    <div class="nav-actions" id="navActions">
+      <a href="editor/" class="nav-link primary">Écrire</a>
+    </div>
+  </div>
+</header>
+
+<main class="main" id="homeScreen">
+  <div id="homeContent"></div>
+</main>
+
+<div class="screen" id="articleScreen">
+  <header class="nav">
+    <div class="nav-inner">
+      <a href="/" class="nav-back" id="backBtn">← Retour</a>
+    </div>
+  </header>
+  <div class="progress-bar" id="progressBar"></div>
+  <div class="article-page" id="articlePage"></div>
+</div>
+
+<div class="toast" id="toastEl"><span id="toastTxt"></span></div>
+
+<script>
+const ARTICLES_KEY = 'pulse-articles';
+
+function getArticles() {
+  try { return JSON.parse(localStorage.getItem(ARTICLES_KEY) || '[]'); } catch { return []; }
+}
+
+function saveArticles(arts) {
+  localStorage.setItem(ARTICLES_KEY, JSON.stringify(arts));
+}
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('on'));
+  document.getElementById(id).classList.add('on');
+}
+
+// ── HOME ──
+function renderHome() {
+  const arts = getArticles();
+  const container = document.getElementById('homeContent');
+  if (!arts.length) {
+    container.innerHTML = `<section class="empty">
+      <div class="empty-icon">✏️</div>
+      <h2 class="empty-title">Aucun article pour l'instant</h2>
+      <p class="empty-desc">Créez votre premier article et publiez-le.</p>
+      <a href="editor/" class="empty-btn">Écrire un article</a>
+    </section>`;
+    return;
+  }
+  const sorted = [...arts].reverse();
+  const first = sorted[0];
+  let html = `<section class="hero" onclick="openArticle('${first.slug}')">
+    <div class="hero-img" style="background:${first.gradient||'linear-gradient(135deg,#2563eb,#3b82f6)'}"></div>
+    <div class="hero-body">
+      <div class="hero-cat">${esc(first.cat||'Non classé')}</div>
+      <h2 class="hero-title">${esc(first.title)}</h2>
+      <p class="hero-desc">${esc(first.excerpt||'')}</p>
+      <div class="hero-meta">${esc(first.date||'')}</div>
+    </div>
+  </section>
+  <section class="section">
+    <div class="section-head">
+      <h3 class="section-title">Articles</h3>
+      <span class="section-link">${sorted.length} article${sorted.length>1?'s':''}</span>
+    </div>`;
+  if (sorted.length > 1) {
+    html += `<div class="card-grid">`;
+    for (let i = 1; i < sorted.length; i++) {
+      const a = sorted[i];
+      html += `<div class="card" onclick="openArticle('${a.slug}')">
+        <div class="card-img" style="background:${a.gradient||'linear-gradient(135deg,#2563eb,#3b82f6)'}"></div>
+        <div class="card-body">
+          <div class="card-cat">${esc(a.cat||'Non classé')}</div>
+          <div class="card-title">${esc(a.title)}</div>
+          <div class="card-date">${esc(a.date||'')}</div>
+        </div>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+  html += `</section>`;
+  container.innerHTML = html;
+  document.getElementById('navActions').innerHTML = '<a href="editor/" class="nav-link primary">Écrire</a>';
+}
+
+// ── ARTICLE ──
+function openArticle(slug) {
+  const arts = getArticles();
+  const a = arts.find(x => x.slug === slug);
+  if (!a) { toast('Article introuvable'); return; }
+  const g = a.gradient || 'linear-gradient(135deg,#2563eb,#3b82f6)';
+  let html = `<div class="article-img" style="background:${g}"></div>
+    <div class="article-head">
+      <div class="article-cat">${esc(a.cat||'Non classé')}</div>
+      <h1 class="article-title">${esc(a.title)}</h1>
+      <div class="article-meta">${esc(a.date||'')}</div>
+    </div>
+    <div class="article-body">${a.body||''}</div>`;
+  if (a.compare && a.compare.rows && a.compare.rows.length) {
+    html += `<div class="comp-section">
+      <h4 class="comp-title">Comparatif</h4>
+      <div class="comp-wrap">
+        <table class="comp-table" id="compTable">
+          <thead><tr>
+            <th data-col="0">Critère <span class="sort-icon">↕</span></th>`;
+    a.compare.headers.forEach((h,i) => { html += `<th data-col="${i+1}">${esc(h)} <span class="sort-icon">↕</span></th>`; });
+    html += `</tr></thead><tbody>`;
+    a.compare.rows.forEach(r => {
+      html += '<tr><td>'+esc(r[0])+'</td>';
+      for (let i=1;i<r.length;i++) {
+        const hl = i === (a.compare.highlight||-1) ? 'hl' : '';
+        const v = r[i];
+        const d = typeof v==='number'&&v>=0&&v<=5 ? '●'.repeat(v)+'○'.repeat(5-v) : esc(String(v));
+        html += `<td class="${hl}">${d}</td>`;
+      }
+      html += '</tr>';
+    });
+    html += `</tbody></table></div>
+      <p class="comp-hint">Cliquez sur un en-tête pour trier</p>
+    </div>`;
+  }
+  html += `<div class="article-footer">
+    <span>Publié <span class="slug">/a/${esc(slug)}</span></span>
+    <button class="copy-btn" onclick="copyUrl('${esc(slug)}')">Copier le lien</button>
+  </div>`;
+  document.getElementById('articlePage').innerHTML = html;
+  showScreen('articleScreen');
+  document.getElementById('backBtn').href = '/';
+  setTimeout(initCompTable, 50);
+  document.title = a.title + ' — Pulse';
+  // Save current slug for back navigation
+  window._currentSlug = slug;
+  window.scrollTo(0,0);
+}
+
+// ── COMPARISON TABLE ──
+function initCompTable() {
+  const t = document.getElementById('compTable');
+  if (!t) return;
+  let sc=-1,sa=true;
+  t.querySelectorAll('th[data-col]').forEach(th => {
+    th.addEventListener('click',()=>{
+      const idx=parseInt(th.dataset.col);
+      sa=sc===idx?!sa:true;sc=idx;
+      const tb=t.querySelector('tbody');
+      const rows=Array.from(tb.querySelectorAll('tr'));
+      const num=rows.every(r=>!isNaN(parseFloat(r.children[idx]?.textContent)));
+      rows.sort((a,b)=>{
+        const va=(a.children[idx]?.textContent||'').trim(),vb=(b.children[idx]?.textContent||'').trim();
+        return num?(sa?parseFloat(va)-parseFloat(vb):parseFloat(vb)-parseFloat(va)):sa?va.localeCompare(vb):vb.localeCompare(va);
+      });
+      rows.forEach(r=>tb.appendChild(r));
+      t.querySelectorAll('.sort-icon').forEach(s=>s.textContent='↕');
+      th.querySelector('.sort-icon').textContent=sa?'↑':'↓';
+    });
+  });
+  t.querySelectorAll('tbody tr').forEach(tr=>tr.addEventListener('click',function(){
+    t.querySelectorAll('tbody tr').forEach(r=>r.classList.remove('active'));
+    this.classList.add('active');
+  }));
+}
+
+// ── ROUTING ──
+function routeFromURL() {
+  const m = window.location.pathname.match(/^\/a\/([a-z0-9]+)/);
+  if (m) { openArticle(m[1]); return true; }
+  return false;
+}
+
+window.addEventListener('popstate', () => {
+  const m = window.location.pathname.match(/^\/a\/([a-z0-9]+)/);
+  if (m) { openArticle(m[1]); return; }
+  showScreen('homeScreen');
+  renderHome();
+  document.title = 'Pulse';
+  document.getElementById('backBtn').href = '/';
+});
+
+// ── PROGRESS BAR ──
+window.addEventListener('scroll', () => {
+  const bar = document.getElementById('progressBar');
+  if (!bar || !document.getElementById('articleScreen').classList.contains('on')) return;
+  const s = window.scrollY, t = document.documentElement.scrollHeight - window.innerHeight;
+  bar.style.width = (t > 0 ? Math.min(s/t*100, 100) : 0) + '%';
+});
+
+// ── UTILS ──
+function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+let tt;
+function toast(m) {
+  document.getElementById('toastTxt').textContent=m;
+  const el=document.getElementById('toastEl');
+  el.classList.add('show');
+  clearTimeout(tt);
+  tt=setTimeout(()=>el.classList.remove('show'),2600);
+}
+function copyUrl(slug) {
+  navigator.clipboard.writeText(window.location.origin+'/a/'+slug).then(()=>toast('Lien copié'));
+}
+
+// ── INIT ──
+if (!routeFromURL()) {
+  renderHome();
+  showScreen('homeScreen');
+}
+</script>
+</body>
+</html>

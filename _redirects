@@ -1,0 +1,3 @@
+/editor  /editor/index.html  200
+/editor/*  /editor/index.html  200
+/a/*  /index.html  200
